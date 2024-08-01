@@ -17,7 +17,7 @@ class ProjectSerializer(serializers.ModelSerializer):
         fields = ('id', 'project_code', 'name','project_type', 'initial_sample_size','sample',
                   'clients','cpi','set_up_fee','transaction_fee', 'status', 
                   'other_cost','operation_select','finance_select','upload_document',
-                  'tentative_start_date','tentative_end_date','estimated_time','status',
+                  'tentative_start_date','tentative_end_date','estimated_time','man_days','total_achievement','remaining_interview','status',
                   'remark','assigned_to','created_by','created_at', 'updated_at'
                   )
         
@@ -26,20 +26,35 @@ class ProjectSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         data['clients'] = {
             'id': instance.clients.id,
-            'username': instance.clients.name,
-        }if instance.department else None
+            'name': instance.clients.name,
+        }if instance.clients else None
         data['project_type'] = {
             'id': instance.project_type.id,
             'name': instance.project_type.name
-        }if instance.department else None
+        }if instance.project_type else None
+        
+        # Include assigned_by and assigned_to_by
+        assignment = ProjectAssignment.objects.filter(project_id=instance).first()
+        if assignment:
+            data['project_assigned_by_manager'] = assignment.assigned_by.id
+            data['project_assigned_to_teamlead'] = assignment.assigned_to.id
+        else:
+            data['project_assigned_by_manager'] = ""
+            data['project_assigned_to_teamlead'] = ""
+            
+            
+        return data
+      
 
     
     def create(self, validated_data):
         request = self.context.get('request')
 
         # Check if the request and user are available
+        user_id = request.user.id
+        user_role = UserRole.objects.get(user=user_id)
         if request and request.user:
-            validated_data['created_by'] = request.user
+            validated_data['created_by'] = user_role
         else:
             # Raise an error if the user is not available
             raise ValidationError("User is not authenticated or request context is missing.")
@@ -50,6 +65,16 @@ class ProjectSerializer(serializers.ModelSerializer):
         except Exception as e:
             # Handle any other exceptions that may occur during object creation
             raise ValidationError(f"Error creating project: {str(e)}") 
+        
+        
+    # def get_assigned_by(self, obj):
+    #     assignment = ProjectAssignment.objects.filter(project_id=obj).first()
+    #     if assignment:
+    #         return assignment.assigned_by.id
+    #     return None
+
+    # def get_assigned_to_by(self, obj):
+    #     return obj.assigned_to.id if obj.assigned_to else None
     
 
         
@@ -95,7 +120,7 @@ class UserRoleSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         data['user'] = {
             'id': instance.user.id,
-            'username': instance.user.username,
+            'name': instance.user.username,
             'email': instance.user.email
         }
         data['role'] = {
@@ -108,7 +133,7 @@ class UserRoleSerializer(serializers.ModelSerializer):
         } if instance.department else None
         data['reports_to'] = {
             'id': instance.reports_to.id,
-            'username': instance.reports_to.user.username
+            'name': instance.reports_to.user.username
         } if instance.reports_to else None
         return data
         
@@ -117,8 +142,16 @@ class UserRoleSerializer(serializers.ModelSerializer):
 
 class UserRoleSerializers(serializers.ModelSerializer):
     class Meta:
-        model = CustomUser
-        fields = ['id', 'email','username']        
+        model = UserRole
+        fields = []  
+        
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['user_role'] = {
+            'id': instance.id,
+            'name': instance.user.username
+        }
+        return representation  
         
         
 ############################################ PROJECT ASSIGNMENT BY OPERATION MANAGER  TO OPERATION TL ############################################
@@ -127,4 +160,24 @@ class UserRoleSerializers(serializers.ModelSerializer):
 class ProjectAssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectAssignment
-        fields = '__all__'       
+        fields = '__all__'
+        
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        representation['project_assigned_by'] = {
+            'project_id': instance.project_id.id,
+            'id': instance.assigned_by.id,
+            'name': instance.assigned_by.user.username
+        }
+        
+        representation['project_assigned_to'] = {
+            'project_id': instance.project_id.id,
+            'id': instance.assigned_to.id,
+            'name': instance.assigned_to.user.username
+        }
+        return representation     
+    
+    
+class ProjectStatusSerializer(serializers.Serializer):
+    project_id = serializers.IntegerField()
+    status = serializers.CharField(max_length=255)

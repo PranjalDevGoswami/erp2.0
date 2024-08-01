@@ -6,13 +6,11 @@ from api.user.models import *
 from api.project.models import *
 
 
-
-
 class ProjectUpdate(models.Model):
-    project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='updates')
+    project_id = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='updates')
     updated_by = models.ForeignKey(UserRole, on_delete=models.CASCADE)
     update_date = models.DateTimeField(auto_now_add=True)
-    man_days_filled = models.FloatField()
+    initial_man_days_filled = models.FloatField(null=True, blank=True)
     total_man_days = models.FloatField()
     remaining_time = models.DurationField(default=timedelta())
     remaining_interview = models.CharField(max_length=255, null=True, blank=True)
@@ -23,22 +21,30 @@ class ProjectUpdate(models.Model):
         ('In Progress', 'In Progress'),
         ('Completed', 'Completed'),
         ('On Hold', 'On Hold'),
-    ], default='To Be Started')
+    ], default='In Progress')
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
-        return f"{self.project.name} - {self.updated_by.role} - {self.updated_by.user.username} - {self.update_date} - {self.man_days_filled} - {self.total_man_days} - {self.remaining_time} - {self.total_achievement}"
+        return f"{self.project_id.name} - {self.updated_by.role} - {self.updated_by.user.username} - {self.update_date} - {self.total_man_days} - {self.remaining_time} - {self.total_achievement}"
 
-    
     def remaining_time_in_hours(self):
-        return self.remaining_time.total_seconds()/3600
-    
-    
-    def calculate_remaining_interview(self):
-        if self.total_man_days and self.man_days_filled:
-            remaining_interview = self.total_man_days - self.man_days_filled
-            return remaining_interview
-        else:
-            return None
-    
-    
+        return self.remaining_time.total_seconds() / 3600
+
+    # def calculate_remaining_interview(self):
+    #     # Fetch previous updates for the same project
+    #     previous_updates = ProjectUpdate.objects.filter(project_id=self.project_id).order_by('-id')
+        
+    #     if previous_updates.exists():
+    #         # Get the last update entry
+    #         last_update = previous_updates.first()
+    #         self.remaining_interview = int(last_update.remaining_interview) - int(self.total_achievement)
+    #     else:
+    #         # First entry, subtract from sample
+    #         self.remaining_interview = int(self.project_id.sample) - int(self.total_achievement)
+
+    #     super().save(*args, **kwargs)
+
+    # def save(self, *args, **kwargs):
+    #     self.calculate_remaining_interview()
+    #     super().save(*args, **kwargs)
+       

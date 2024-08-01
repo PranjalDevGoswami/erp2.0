@@ -28,7 +28,7 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.exceptions import NotFound
 from django.http import HttpResponse, HttpResponseNotFound, Http404
 from api.user.serializers import *
-
+from api.operation.models import *
 ############################################# USER ROLE AS MANAGER IN PROJECT VIEWS######################################
 
 class UserRoleViewSet(viewsets.ReadOnlyModelViewSet):
@@ -48,31 +48,31 @@ class UserRoleViewSet(viewsets.ReadOnlyModelViewSet):
 ################################################## TL Under Manager ############################################################
 
 class TeamLeadsUnderManagerView(APIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
     def get(self, request, manager_id, format=None):
         try:
-            # Fetch the UserRole of the Operations Manager
+            # Fetch the UserRole of the Manager
             manager_role = UserRole.objects.get(id=manager_id)
             
-            # Ensure the role of the manager is 'Operations Manager'
+            # Ensure the role of the manager is 'Manager'
             if manager_role.role.name != 'Manager':
                 return Response(
-                    {'error': 'The specified user is not an Operations Manager'},
+                    {'error': 'The specified user is not a Manager'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Get all Team Leads reporting to this Operations Manager
+            # Get all Team Leads reporting to this Manager
             team_leads = UserRole.objects.filter(
                 reports_to=manager_role,
-                role__name='Team Lead'
+                role__name='TL'
             )
-
+            
             # Serialize the manager details
-            manager_serializer = UserRoleSerializers(manager_role.user)
-
+            manager_serializer = UserRoleSerializers(manager_role)
+            
             # Serialize the user information of the Team Leads
-            team_leads_serializer = UserRoleSerializers([lead.user for lead in team_leads], many=True)
+            team_leads_serializer = UserRoleSerializers(team_leads, many=True)
 
             response_data = {
                 'manager': manager_serializer.data,
@@ -83,17 +83,16 @@ class TeamLeadsUnderManagerView(APIView):
         
         except UserRole.DoesNotExist:
             return Response(
-                {'error': 'Operations Manager not found'},
+                {'error': 'Manager not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
-
 
 
 ####################################################### Project API View #######################################################
 
 class ProjectListAPIView(APIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
     def get(self, request):
         try:
             projects = Project.objects.all()
@@ -132,7 +131,9 @@ class ProjectListAPIView(APIView):
             return Response({"error": "Project Type does not exist."}, status=status.HTTP_400_BAD_REQUEST)
 
         # Add the authenticated user to the data
-        data['created_by'] = request.user.id
+        user_id = request.user.id
+        user_role_id = UserRole.objects.get(user=user_id).id
+        data['created_by'] = user_role_id
         data['assigned_to'] = manager.id
         data['project_type'] = project_type.id
 
@@ -246,23 +247,27 @@ class ClientPagination(PageNumberPagination):
 class ClientViewSet(viewsets.ModelViewSet):
     serializer_class = ClientSerializer
     pagination_class = ClientPagination
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
         queryset = Client.objects.all()
-        name = self.request.query_params.get('name', None)
-        if name is not None:
-            queryset = queryset.filter(name__icontains=name)
+        # name = self.request.query_params.get('name', None)
+        # print('hello name',name)
+        # if name is not None:
+        #     queryset = queryset.filter(name__icontains=name)
+        #     print('my name',queryset)
         return queryset
 
     # @cached_as(Client.objects.all())
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
-        page = self.paginate_queryset(queryset)
-        if page is not None:
-            serializer = self.get_serializer(page, many=True)
-            return self.get_paginated_response(serializer.data)
+        # print('modify name',queryset)
+        # page = self.paginate_queryset(queryset)
+        # print('page to page',page)
+        # if page is not None:
+        #     serializer = self.get_serializer(page, many=True)
+        #     return self.get_paginated_response(serializer.data)
         serializer = self.get_serializer(queryset, many=True)
         return Response(serializer.data)
 
@@ -342,8 +347,9 @@ class ProjectTypeViewSet(viewsets.ModelViewSet):
 
 @swagger_auto_schema(request_body=ProjectAssignmentSerializer(many=True))
 class ProjectAssignmentAPIView(APIView):
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    # authentication_classes = [JWTAuthentication]
+    # permission_classes = [IsAuthenticated]
+
     def get(self, request):
         try:
             assignments = ProjectAssignment.objects.all()
@@ -351,25 +357,21 @@ class ProjectAssignmentAPIView(APIView):
             return Response(serializer.data)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
-        
-        
-    # POST request to create a new project assignment
+
+    @swagger_auto_schema(request_body=ProjectAssignmentSerializer(many=True))
     def post(self, request, *args, **kwargs):
         data = request.data
-
         if isinstance(data, list):
             # Handle bulk creation
             return self.bulk_create(data)
         else:
             # Handle single creation
             return self.single_create(data)
-        
-        
-    # Helper function to handle bulk creation
+
     def single_create(self, data):
         try:
             with transaction.atomic():
-                project_id = data.get('project')
+                project_id = data.get('project_id')
                 assigned_by_id = data.get('assigned_by')
                 assigned_to_id = data.get('assigned_to')
 
@@ -380,22 +382,23 @@ class ProjectAssignmentAPIView(APIView):
                 assigned_by = get_object_or_404(UserRole, id=assigned_by_id)
                 assigned_to = get_object_or_404(UserRole, id=assigned_to_id)
 
-                assignment = ProjectAssignment(project=project, assigned_by=assigned_by, assigned_to=assigned_to)
+                assignment = ProjectAssignment(project_id=project, assigned_by=assigned_by, assigned_to=assigned_to)
                 assignment.save()
+
+                project.status = "To Be Started"
+                project.save()
 
                 serializer = ProjectAssignmentSerializer(assignment)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-    
-    # Helper function to handle bulk creation
     def bulk_create(self, data):
         try:
             assignments = []
             with transaction.atomic():
                 for item in data:
-                    project_id = item.get('project')
+                    project_id = item.get('project_id')
                     assigned_by_id = item.get('assigned_by')
                     assigned_to_id = item.get('assigned_to')
 
@@ -406,12 +409,43 @@ class ProjectAssignmentAPIView(APIView):
                     assigned_by = get_object_or_404(UserRole, id=assigned_by_id)
                     assigned_to = get_object_or_404(UserRole, id=assigned_to_id)
 
-                    assignment = ProjectAssignment(project=project, assigned_by=assigned_by, assigned_to=assigned_to)
+                    assignment = ProjectAssignment(project_id=project, assigned_by=assigned_by, assigned_to=assigned_to)
+                    assignment.save()
                     assignments.append(assignment)
 
-                ProjectAssignment.objects.bulk_create(assignments)
+                    project.status = "To Be Started"
+                    project.save()
 
                 serializer = ProjectAssignmentSerializer(assignments, many=True)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
             return Response({"error": str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+        
+        
+class UpdateProjectStatusAPIView(APIView):
+    serializer_class = ProjectStatusSerializer
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    @swagger_auto_schema(request_body=ProjectStatusSerializer)
+    def post(self, request, *args, **kwargs):
+        serializer = ProjectStatusSerializer(data=request.data)
+        if serializer.is_valid():
+            project_id = serializer.validated_data['project_id']
+            status_value = serializer.validated_data['status']
+            
+            try:
+                project = Project.objects.get(id=project_id)
+                last_project_update = ProjectUpdate.objects.filter(project_id=project_id).last()
+                
+                if last_project_update:
+                    last_project_update.status = status_value
+                    last_project_update.save()
+                
+                project.status = status_value
+                project.save()
+                
+                return Response({"message": "Project status updated successfully."}, status=status.HTTP_200_OK)
+            except Project.DoesNotExist:
+                return Response({"message": "Project with the given ID does not exist."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
