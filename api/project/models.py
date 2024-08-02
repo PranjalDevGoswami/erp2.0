@@ -127,10 +127,15 @@ class ProjectAssignment(models.Model):
 
 
 class ProjectUpdatedData(models.Model):
-    project_code = models.CharField(max_length=255, null=True, blank=True, unique=True)
-    sample = models.CharField(max_length=50,null=True, blank=True)
-    tentative_end_date = models.DateTimeField(null=True,blank=True)   
-    reason_for_adjustment = models.TextField(null=True, blank=True,default=None)
+    project_id = models.IntegerField(unique=True)
+    sample = models.CharField(max_length=50, null=True, blank=True)
+    tentative_end_date = models.DateTimeField(null=True, blank=True)
+    reason_for_adjustment = models.TextField(null=True, blank=True, default=None)
+    
+    
+   
+    
+
     
 
     

@@ -181,3 +181,17 @@ class ProjectAssignmentSerializer(serializers.ModelSerializer):
 class ProjectStatusSerializer(serializers.Serializer):
     project_id = serializers.IntegerField()
     status = serializers.CharField(max_length=255)
+    
+
+
+class ProjectUpdatedDataSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = ProjectUpdatedData
+        fields = ['project_id', 'sample', 'tentative_end_date', 'reason_for_adjustment']
+    
+class ProjectEmailSerializer(serializers.ModelSerializer):
+    project_id = serializers.IntegerField(write_only=True)
+
+    class Meta:
+        model = Project
+        fields = ['project_id', 'sample', 'tentative_end_date', 'reason_for_adjustment']

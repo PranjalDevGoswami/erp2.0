@@ -16,5 +16,7 @@ urlpatterns = [
     path('manager/<int:manager_id>/teamleads/', TeamLeadsUnderManagerView.as_view(), name='teamleads-under-manager'),
     path('project-assignments/', ProjectAssignmentAPIView.as_view(), name='project-assignment'),
     path('update-project-status/', UpdateProjectStatusAPIView.as_view(), name='update_project_status'),
+    path('interview/samplesize/edit', ProjectEmailView.as_view(), name='edit_project_sample'),
+    path('updated-data/<int:project_id>/', ProjectUpdatedDataView.as_view(), name='project-updated-data'),
 
 ]

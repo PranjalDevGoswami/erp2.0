@@ -30,21 +30,4 @@ class ProjectUpdate(models.Model):
     def remaining_time_in_hours(self):
         return self.remaining_time.total_seconds() / 3600
 
-    # def calculate_remaining_interview(self):
-    #     # Fetch previous updates for the same project
-    #     previous_updates = ProjectUpdate.objects.filter(project_id=self.project_id).order_by('-id')
-        
-    #     if previous_updates.exists():
-    #         # Get the last update entry
-    #         last_update = previous_updates.first()
-    #         self.remaining_interview = int(last_update.remaining_interview) - int(self.total_achievement)
-    #     else:
-    #         # First entry, subtract from sample
-    #         self.remaining_interview = int(self.project_id.sample) - int(self.total_achievement)
-
-    #     super().save(*args, **kwargs)
-
-    # def save(self, *args, **kwargs):
-    #     self.calculate_remaining_interview()
-    #     super().save(*args, **kwargs)
-       
+   

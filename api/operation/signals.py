@@ -18,10 +18,9 @@ updating_project = False
 
 @receiver(post_save, sender=ProjectUpdate)
 def update_project_instance(sender, instance, created, **kwargs):
-    # if created:
-        project_id = instance.project_id.id
-        print('project_id', project_id)
-        update_project(project_id)
+    project_id = instance.project_id.id
+    logger.info(f"Project ID received: {project_id}")
+    update_project(project_id)
 
 def update_project(project_id):
     global updating_project
@@ -33,26 +32,29 @@ def update_project(project_id):
             logger.error(f"Project with id {project_id} not found.")
             return
 
+        # Check if the fields exist in ProjectUpdate
+        project_update_fields = [field.name for field in ProjectUpdate._meta.get_fields()]
+        if 'total_man_days' not in project_update_fields or 'total_achievement' not in project_update_fields:
+            logger.error(f"Fields total_man_days or total_achievement not found in ProjectUpdate model.")
+            return
+
         aggregation_result = ProjectUpdate.objects.filter(project_id=project_id).aggregate(
-            total_man_days=Sum(Cast('total_man_days', FloatField())),
-            total_achievement=Sum(Cast('total_achievement', IntegerField()))
+            total_man_days=Sum(Cast('total_achievement', FloatField())),
+            total_achievement=Sum(Cast('total_achievement', FloatField()))  # Assuming total_achievement needs to be summed as float
         )
         total_man_days = aggregation_result['total_man_days'] or 0
         total_achievement = aggregation_result['total_achievement'] or 0
-        print(total_man_days, total_achievement)
+        logger.info(f"Total man days: {total_man_days}, Total achievement: {total_achievement}")
+
         project_instance.man_days = total_man_days
         project_instance.total_achievement = total_achievement
 
         last_operation_team = ProjectUpdate.objects.filter(project_id=project_id).last()
-        print(last_operation_team)
-        print('last to last', last_operation_team.remaining_interview if last_operation_team else None)
+        logger.info(f"Last operation team: {last_operation_team}")
 
         if last_operation_team:
             remaining_interview = last_operation_team.remaining_interview
-            if remaining_interview is None:
-                remaining_interview = 0  # Handle the case where remaining_interview is None
-
-            remaining_interview = int(remaining_interview)
+            remaining_interview = int(remaining_interview) if remaining_interview is not None else 0
             if remaining_interview < 0:
                 project_instance.status = 'Completed'
                 logger.error("Interviews completed. Cannot create another entry.")
@@ -66,7 +68,6 @@ def update_project(project_id):
                     project_instance.status = 'Completed'
 
         project_instance.save()
-
     except Exception as e:
         logger.error(f"An error occurred while updating project: {e}")
         raise
@@ -74,70 +75,4 @@ def update_project(project_id):
         updating_project = False
 
 
-# @receiver(post_save, sender=ProjectUpdate)
-# def update_project_instance(sender, instance, created, **kwargs):
-#     global updating_project
-#     if created and not updating_project:
-#         project_id = instance.project.id
-#         print('bfvgyftyftyftyftft',project_id)
-#         proj_obj = instance.project.status
-       
-#         try:
-#             print('DFE')
-#             update_project(project_id)
-#             instance.signal_success = True
-#             proj_obj.update(remark="project_start_by_operation_team", status="In_Progress")
-#             instance.save()
-#         except Exception as e:
-#             print('FFFF!@#$$$')
-#             logger.error(f"Error in signal: {e}")
-#             instance.signal_success = False
-#             if proj_obj == "In_Progress":
-#                 instance.save()
-#                 instance.delete()  # Rollback the instance creation
-#                 raise ValueError("Due to a signal failure, the project cannot move forward.")
-#             else:
-#                 proj_obj.update(status="To_Be_Started")
-#                 instance.save()
-#                 instance.delete()  # Rollback the instance creation
-#                 raise ValueError("Due to a signal failure, the project cannot move forward.")
-
-
-
-# def update_project(project_id):
-#     project_instance = Project.objects.filter(id=project_id).first()
-#     if project_instance.remark is not None:
-#         # Aggregate man_days and total_achievement
-#         aggregation_result = ProjectUpdate.objects.filter(project=project_id).aggregate(
-#             total_man_days=Sum('man_days'),
-#             total_achievement=Sum('total_achievement')
-#         )
-#         total_man_days = aggregation_result['total_man_days'] or 0
-#         print('total man days',total_man_days)
-#         total_achievement = aggregation_result['total_achievement'] or 0
-
-#         project_instance.man_days = total_man_days
-#         project_instance.total_achievement = total_achievement
-       
-
-#         # Get the last operationTeam instance
-#         last_operation_team = ProjectUpdate.objects.filter(project=project_id).last()
-#         if last_operation_team:
-#             # If remaining_interview becomes zero, set project status to "completed"
-#             remaining_interview = int(last_operation_team.remaining_interview)
-#             if remaining_interview < 0:
-#                 project_instance.status = 'Completed'
-#                 # Raise error if another entry is attempted to be created
-#                 raise ValueError("Interviews completed. Cannot create another entry.")
-           
-#             else:
-#                 project_instance.remaining_interview = remaining_interview
-#                 project_instance.remaining_time = last_operation_team.remaining_time
-#                 project_instance.status = last_operation_team.status
-                        
-#                 if int(last_operation_team.remaining_interview) == 0:
-#                      project_instance.status = 'Completed'
-                    
-
-#         project_instance.save()
 

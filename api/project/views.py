@@ -29,7 +29,11 @@ from rest_framework.exceptions import NotFound
 from django.http import HttpResponse, HttpResponseNotFound, Http404
 from api.user.serializers import *
 from api.operation.models import *
+import logging
+
+logger = logging.getLogger(__name__)
 ############################################# USER ROLE AS MANAGER IN PROJECT VIEWS######################################
+
 
 class UserRoleViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = UserRole.objects.all()
@@ -39,11 +43,10 @@ class UserRoleViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=False, methods=['get'])
     def managers(self, request):
-        manager_role_name = 'Manager'
-        managers = UserRole.objects.filter(role__name=manager_role_name).filter(department__name='Operation')
+        manager_roles = ['Manager', 'As.Manager', 'Sr.Manager']
+        managers = UserRole.objects.filter(role__name__in=manager_roles, department__name='Operation')
         serializer = self.get_serializer(managers, many=True)
         return Response(serializer.data)
-
 
 ################################################## TL Under Manager ############################################################
 
@@ -449,3 +452,95 @@ class UpdateProjectStatusAPIView(APIView):
             except Project.DoesNotExist:
                 return Response({"message": "Project with the given ID does not exist."}, status=status.HTTP_404_NOT_FOUND)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+
+class ProjectEmailView(APIView):
+    @swagger_auto_schema(request_body=ProjectEmailSerializer)
+    def post(self, request):
+        logger.info("Received request data: %s", request.data)
+        serializer = ProjectEmailSerializer(data=request.data)
+        
+        if serializer.is_valid():
+            project_id = serializer.validated_data['project_id']
+            sample = serializer.validated_data.get('sample', '')
+            tentative_end_date = serializer.validated_data.get('tentative_end_date', '')
+            reason_for_adjustment = serializer.validated_data.get('reason_for_adjustment', '')
+
+            try:
+                project = get_object_or_404(Project, id=project_id)
+            except Exception as e:
+                logger.error("Error fetching project: %s", e)
+                return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
+
+            manager_emails = "ankit.sharma@novusinsights.com"
+            frm_email = "noreply.erp@unimrkt.com"
+
+            subject = f"Project Update: {project.name}"
+            message = f"""Dear Manager,
+
+            Here is an update on the project:
+
+            - **Project ID**: {project_id}
+            - **Sample**: {sample}
+            - **Tentative End Date**: {tentative_end_date}
+            - **Reason for Adjustment**: {reason_for_adjustment}
+
+            Please review the project details at your earliest convenience.
+            """
+
+            to_email = manager_emails
+
+            try:
+                send_mail(
+                    subject,
+                    message,
+                    frm_email,
+                    [to_email],
+                )
+                logger.info("Email sent successfully to: %s", to_email)
+            except Exception as e:
+                logger.error("Error sending email: %s", e)
+                return Response({"error": f"Failed to send email.{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            try:
+                ProjectUpdatedData.objects.update_or_create(
+                    project_id=project_id,
+                    defaults={
+                        'sample': sample,
+                        'tentative_end_date': tentative_end_date,
+                        'reason_for_adjustment': reason_for_adjustment
+                    }
+                )
+                project.send_email_manager = True
+                project.save()
+            except Exception as e:
+                logger.error("Error updating project data: %s", e)
+                return Response({"error": f"Failed to update project data.{e}"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+            context = {
+                "message": "Email sent successfully!",
+                "project_id": project_id,
+                "sample": sample,
+                "tentative_end_date": tentative_end_date,
+                "reason_for_adjustment": reason_for_adjustment
+            }
+            return Response(context, status=status.HTTP_200_OK)
+        else:
+            logger.error("Serializer errors: %s", serializer.errors)
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+
+class ProjectUpdatedDataView(APIView):
+    def get(self, request, project_id):
+        # Get the project based on project_id and check if send_email_manager is True
+        project = get_object_or_404(Project, id=project_id, send_email_manager=True)
+
+        # Filter data in ProjectUpdatedData based on project_id
+        updated_data = ProjectUpdatedData.objects.filter(project_id=project_id)
+
+        if updated_data.exists():
+            serializer = ProjectUpdatedDataSerializer(updated_data, many=True)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        else:
+            return Response({"message": "No updated data found for this project ID."}, status=status.HTTP_404_NOT_FOUND)

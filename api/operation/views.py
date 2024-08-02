@@ -21,7 +21,7 @@ from django.shortcuts import get_object_or_404
 from rest_framework.permissions import IsAuthenticated
 from rest_framework_simplejwt.authentication import JWTAuthentication
 import logging
-from api.operation.models import *
+
 ############################################### ADD MAN-DAYS FILLED BY OPERATION TEAM - BULK UPDATE  ##################################################
 
 class ProjectUpdateBulkAPIView(APIView):
