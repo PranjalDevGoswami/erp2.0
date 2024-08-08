@@ -12,9 +12,13 @@ from django.db import transaction
 from django.db.models.functions import Cast
 from django.db.models import IntegerField, FloatField
 from django.db.models import F, Value
+from django.core.exceptions import ValidationError
+
 import logging
 from api.operation.models import *
+logger = logging.getLogger(__name__)
 
+updating_project_update = False
 
 
 @receiver(post_save, sender=Client)
@@ -60,10 +64,6 @@ def update_project_code(sender, instance, created, **kwargs):
                 
             
 
-# Set up logging
-logger = logging.getLogger(__name__)
-updating_project_update = False
-
 @receiver(post_save, sender=Project)
 def update_related_fields(sender, instance, **kwargs):
     global updating_project_update
@@ -73,9 +73,8 @@ def update_related_fields(sender, instance, **kwargs):
     updating_project_update = True
 
     try:
-        project_update_objects = ProjectUpdate.objects.filter(project_id=instance.id)
-        print(project_update_objects)
-
+        project_update_objects = ProjectUpdate.objects.filter(project_id=instance)
+        
         if project_update_objects.exists():
             first_project_update = project_update_objects.first()
 
@@ -92,16 +91,20 @@ def update_related_fields(sender, instance, **kwargs):
                 total_man_days=Sum(Cast('total_man_days', FloatField())),
                 total_achievement=Sum(Cast('total_achievement', IntegerField()))
             )
+
+            # Update instance fields
             instance.man_days = aggregation_result['total_man_days'] or 0
             instance.total_achievement = aggregation_result['total_achievement'] or 0
 
-        instance.save(update_fields=['remaining_interview', 'total_man_days', 'total_achievement'])
+            # Save only the necessary fields
+            instance.save(update_fields=['remaining_interview', 'man_days', 'total_achievement'])
 
     except Exception as e:
         logger.error(f"An error occurred while updating project update: {e}")
 
     finally:
         updating_project_update = False
+        
 
 @receiver(pre_save, sender=Project)
 def update_project_update_end_date(sender, instance, **kwargs):
@@ -111,6 +114,8 @@ def update_project_update_end_date(sender, instance, **kwargs):
             old_instance = Project.objects.get(pk=instance.pk)
             print('old_instance', old_instance)
 
+            if instance.tentative_start_date > instance.tentative_end_date:
+                raise ValidationError("Project Start Date must be less than or equal to Project End Date!")
             # Check if the tentative_end_date has changed
             if old_instance.tentative_end_date != instance.tentative_end_date:
                 # Calculate the difference in tentative_end_date
@@ -131,6 +136,9 @@ def update_project_update_end_date(sender, instance, **kwargs):
                     else:
                         project_update.remaining_time = date_difference
                     project_update.save()
+                    
+           
+                
     except Project.DoesNotExist:
         pass  # If the project does not exist, it is being created, so no need to update ProjectUpdate here
 

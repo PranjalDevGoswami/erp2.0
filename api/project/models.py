@@ -77,7 +77,6 @@ class Project(models.Model):
     tentative_start_date = models.DateTimeField(null=True, blank=True)
     tentative_end_date = models.DateTimeField(null=True, blank=True)
     estimated_time = models.DurationField(null=True, blank=True)
-    # status = models.CharField(max_length=255, null=True, blank=True)
     remark = models.CharField(max_length=255, null=True, blank=True)
     man_days = models.FloatField(null=True, blank=True)
     reason_for_adjustment = models.TextField(null=True, blank=True, default=None)
@@ -131,6 +130,9 @@ class ProjectUpdatedData(models.Model):
     sample = models.CharField(max_length=50, null=True, blank=True)
     tentative_end_date = models.DateTimeField(null=True, blank=True)
     reason_for_adjustment = models.TextField(null=True, blank=True, default=None)
+    updated_by = models.ForeignKey(UserRole, on_delete=models.CASCADE, related_name='updated_projects_by')
+    updated_at = models.DateTimeField(auto_now_add=True)
+
     
     
    

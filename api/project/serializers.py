@@ -18,7 +18,7 @@ class ProjectSerializer(serializers.ModelSerializer):
                   'clients','cpi','set_up_fee','transaction_fee', 'status', 
                   'other_cost','operation_select','finance_select','upload_document',
                   'tentative_start_date','tentative_end_date','estimated_time','man_days','total_achievement','remaining_interview','status',
-                  'remark','assigned_to','created_by','created_at', 'updated_at'
+                  'remark','assigned_to','created_by','send_email_manager','created_at', 'updated_at'
                   )
         
         
@@ -115,12 +115,12 @@ class UserRoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserRole
         fields = ['id', 'user', 'role', 'department', 'reports_to']
-
+        
     def to_representation(self, instance):
         data = super().to_representation(instance)
         data['user'] = {
             'id': instance.user.id,
-            'name': instance.user.username,
+            'username': instance.user.username,
             'email': instance.user.email
         }
         data['role'] = {
@@ -133,49 +133,77 @@ class UserRoleSerializer(serializers.ModelSerializer):
         } if instance.department else None
         data['reports_to'] = {
             'id': instance.reports_to.id,
-            'name': instance.reports_to.user.username
+            'username': instance.reports_to.user.username
         } if instance.reports_to else None
         return data
         
+        
 
 ############################################## USER SERIALIZERS MODIFICATION ###############################################################
-
-class UserRoleSerializers(serializers.ModelSerializer):
-    class Meta:
-        model = UserRole
-        fields = []  
-        
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        representation['user_role'] = {
-            'id': instance.id,
-            'name': instance.user.username
-        }
-        return representation  
-        
+# class UserRoleSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = CustomUser
+#         fields = ['id','email','username']
         
 ############################################ PROJECT ASSIGNMENT BY OPERATION MANAGER  TO OPERATION TL ############################################
+
+
+# class ProjectAssignmentSerializer(serializers.ModelSerializer):
+#     class Meta:
+#         model = ProjectAssignment
+#         fields = '__all__'
+        
+#     def to_representation(self, instance):
+#         representation = super().to_representation(instance)
+#         representation['project_assigned_by'] = {
+#             'project_id': instance.project_id.id,
+#             'id': instance.assigned_by.id,
+#             'name': instance.assigned_by.user.username
+#         }
+        
+#         representation['project_assigned_to'] = {
+#             'project_id': instance.project_id.id,
+#             'id': instance.assigned_to.id,
+#             'name': instance.assigned_to.user.username
+#         }
+#         return representation     
+
 
 
 class ProjectAssignmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProjectAssignment
         fields = '__all__'
-        
+
     def to_representation(self, instance):
         representation = super().to_representation(instance)
+
+        # Get the project ID
+        project_id = instance.project_id.id
+
+        # Fetch all assignments related to the project
+        assignments = ProjectAssignment.objects.filter(project_id=instance.project_id)
+
+        # Create a list of users assigned to the project
+        assigned_users = [
+            {
+                'id': assignment.assigned_to.id,
+                'name': assignment.assigned_to.user.username
+            }
+            for assignment in assignments
+        ]
+
+        representation['project_assigned_to'] = assigned_users
+
+        # Show the user who made the assignment for this specific instance
         representation['project_assigned_by'] = {
-            'project_id': instance.project_id.id,
+            'project_id': project_id,
             'id': instance.assigned_by.id,
             'name': instance.assigned_by.user.username
         }
-        
-        representation['project_assigned_to'] = {
-            'project_id': instance.project_id.id,
-            'id': instance.assigned_to.id,
-            'name': instance.assigned_to.user.username
-        }
-        return representation     
+
+        return representation
+
     
     
 class ProjectStatusSerializer(serializers.Serializer):

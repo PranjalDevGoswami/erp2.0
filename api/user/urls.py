@@ -23,7 +23,7 @@ urlpatterns = [
     path('reset-password/<uid>/<token>/', UserPasswordResetView.as_view(), name='reset-password'),
     path('user/status/', UpdateUserStatusAPIView.as_view(), name='update-user-status'),
     path('update-profile/', UpdateProfileAPIView.as_view(), name='update_profile'),
-    path('api/user-reports/<int:user_id>/', UserReportsView.as_view(), name='user-reports'),
+    # path('api/user-reports/<int:user_id>/', UserReportsView.as_view(), name='user-reports'),
 
   
 ]

@@ -258,19 +258,7 @@ class UserPasswordResetSerializer(serializers.Serializer):
         return attrs
 
 
-class UserRoleSerializer(serializers.ModelSerializer):
-    user = serializers.StringRelatedField()
-    role = serializers.StringRelatedField()
-    department = serializers.StringRelatedField()
-    subordinates = serializers.PrimaryKeyRelatedField(many=True, read_only=True)
-
-    class Meta:
-        model = UserRole
-        fields = ['user', 'role', 'department', 'reports_to', 'subordinates']
-        
-
 #ZoneMaster Serializer Class
-
 class ZoneMasterSerializer(serializers.ModelSerializer):
     zone_cities = serializers.StringRelatedField(many=True)
     regions = serializers.StringRelatedField(many=True)

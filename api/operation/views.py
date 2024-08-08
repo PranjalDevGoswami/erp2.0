@@ -26,7 +26,7 @@ import logging
 
 class ProjectUpdateBulkAPIView(APIView):
     serializer_class = ProjectUpdateSerializer
-    permission_classes = (permissions.AllowAny,)
+    permission_classes = [IsAuthenticated]
 
     @swagger_auto_schema(request_body=ProjectUpdateSerializer(many=True))
     def post(self, request):

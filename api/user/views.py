@@ -264,13 +264,13 @@ class UserPasswordResetView(APIView):
     return Response({'msg':'Password Reset Successfully'}, status=status.HTTP_200_OK)
 
 
-class UserReportsView(generics.ListAPIView):
-    serializer_class = UserRoleSerializer
-    permission_classes = [IsAuthenticated]
+# class UserReportsView(generics.ListAPIView):
+#     serializer_class = UserRoleSerializer
+#     permission_classes = [IsAuthenticated]
 
-    def get_queryset(self):
-        user_id = self.kwargs['user_id']
-        return UserRole.objects.filter(reports_to_id=user_id)
+#     def get_queryset(self):
+#         user_id = self.kwargs['user_id']
+#         return UserRole.objects.filter(reports_to_id=user_id)
     
 
 class ZoneViewSet(viewsets.ModelViewSet):

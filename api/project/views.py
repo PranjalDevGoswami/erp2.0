@@ -31,49 +31,52 @@ from api.user.serializers import *
 from api.operation.models import *
 import logging
 
+
 logger = logging.getLogger(__name__)
-############################################# USER ROLE AS MANAGER IN PROJECT VIEWS######################################
+############################################# USER ROLE AS MANAGER IN PROJECT VIEWS ######################################
 
 
 class UserRoleViewSet(viewsets.ReadOnlyModelViewSet):
     queryset = UserRole.objects.all()
-    serializer_class = UserRoleSerializer
-    authentication_classes = [JWTAuthentication]
-    permission_classes = [IsAuthenticated]
+    serializer_class = UserRoleSerializer  # This will be used for other actions
 
     @action(detail=False, methods=['get'])
     def managers(self, request):
-        manager_roles = ['Manager', 'As.Manager', 'Sr.Manager']
-        managers = UserRole.objects.filter(role__name__in=manager_roles, department__name='Operation')
-        serializer = self.get_serializer(managers, many=True)
+        manager_role_name = ['Manager','As.Manager','Sr.Manager','Director']
+        managers = UserRole.objects.filter(role__name__in=manager_role_name, department__name='Operation')
+        serializer = UserRoleSerializer(managers, many=True)
         return Response(serializer.data)
-
+    
 ################################################## TL Under Manager ############################################################
 
 class TeamLeadsUnderManagerView(APIView):
     # authentication_classes = [JWTAuthentication]
     # permission_classes = [IsAuthenticated]
+    
     def get(self, request, manager_id, format=None):
         try:
             # Fetch the UserRole of the Manager
             manager_role = UserRole.objects.get(id=manager_id)
-            
-            # Ensure the role of the manager is 'Manager'
-            if manager_role.role.name != 'Manager':
+
+            # Check if the manager's role is 'Director'
+            if manager_role.role.name == 'Director':
+                # If the manager is a Director, get all Team Leads
+                team_leads = UserRole.objects.filter(role__name='TL')
+            elif manager_role.role.name == 'Manager':
+                # If the manager is a Manager, get only the Team Leads reporting to this Manager
+                team_leads = UserRole.objects.filter(
+                    reports_to=manager_role,
+                    role__name='TL'
+                )
+            else:
                 return Response(
-                    {'error': 'The specified user is not a Manager'},
+                    {'error': 'The specified user is neither a Manager nor a Director'},
                     status=status.HTTP_400_BAD_REQUEST
                 )
 
-            # Get all Team Leads reporting to this Manager
-            team_leads = UserRole.objects.filter(
-                reports_to=manager_role,
-                role__name='TL'
-            )
-            
             # Serialize the manager details
             manager_serializer = UserRoleSerializers(manager_role)
-            
+
             # Serialize the user information of the Team Leads
             team_leads_serializer = UserRoleSerializers(team_leads, many=True)
 
@@ -81,14 +84,15 @@ class TeamLeadsUnderManagerView(APIView):
                 'manager': manager_serializer.data,
                 'team_leads': team_leads_serializer.data
             }
-            
+
             return Response(response_data, status=status.HTTP_200_OK)
-        
+
         except UserRole.DoesNotExist:
             return Response(
                 {'error': 'Manager not found'},
                 status=status.HTTP_404_NOT_FOUND
             )
+
 
 
 ####################################################### Project API View #######################################################
@@ -377,6 +381,7 @@ class ProjectAssignmentAPIView(APIView):
                 project_id = data.get('project_id')
                 assigned_by_id = data.get('assigned_by')
                 assigned_to_id = data.get('assigned_to')
+                print(assigned_by_id,assigned_to_id)
 
                 if not project_id or not assigned_by_id or not assigned_to_id:
                     return Response({"error": "Project ID, Assigned By ID, and Assigned To ID are required."}, status=status.HTTP_400_BAD_REQUEST)
@@ -384,13 +389,13 @@ class ProjectAssignmentAPIView(APIView):
                 project = get_object_or_404(Project, id=project_id)
                 assigned_by = get_object_or_404(UserRole, id=assigned_by_id)
                 assigned_to = get_object_or_404(UserRole, id=assigned_to_id)
-
+                print(assigned_by,assigned_to,'******')
                 assignment = ProjectAssignment(project_id=project, assigned_by=assigned_by, assigned_to=assigned_to)
                 assignment.save()
 
                 project.status = "To Be Started"
                 project.save()
-
+                print('YYYYYY')
                 serializer = ProjectAssignmentSerializer(assignment)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
         except Exception as e:
@@ -456,23 +461,28 @@ class UpdateProjectStatusAPIView(APIView):
 
 
 class ProjectEmailView(APIView):
+    serializer_class = ProjectEmailSerializer
+    # authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
     @swagger_auto_schema(request_body=ProjectEmailSerializer)
     def post(self, request):
         logger.info("Received request data: %s", request.data)
         serializer = ProjectEmailSerializer(data=request.data)
-        
+
         if serializer.is_valid():
             project_id = serializer.validated_data['project_id']
-            sample = serializer.validated_data.get('sample', '')
-            tentative_end_date = serializer.validated_data.get('tentative_end_date', '')
-            reason_for_adjustment = serializer.validated_data.get('reason_for_adjustment', '')
-
             try:
                 project = get_object_or_404(Project, id=project_id)
             except Exception as e:
                 logger.error("Error fetching project: %s", e)
                 return Response({"error": "Project not found."}, status=status.HTTP_404_NOT_FOUND)
 
+            sample = project.sample if serializer.validated_data.get('sample') == "" else serializer.validated_data.get('sample')
+            tentative_end_date = serializer.validated_data.get('tentative_end_date')
+            reason_for_adjustment = serializer.validated_data.get('reason_for_adjustment', '')
+
+            user_role = UserRole.objects.get(user=request.user.id)  
+            
             manager_emails = "ankit.sharma@novusinsights.com"
             frm_email = "noreply.erp@unimrkt.com"
 
@@ -509,7 +519,8 @@ class ProjectEmailView(APIView):
                     defaults={
                         'sample': sample,
                         'tentative_end_date': tentative_end_date,
-                        'reason_for_adjustment': reason_for_adjustment
+                        'reason_for_adjustment': reason_for_adjustment,
+                        'updated_by' : user_role,
                     }
                 )
                 project.send_email_manager = True
